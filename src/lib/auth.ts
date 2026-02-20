@@ -4,7 +4,13 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start'
 import { db } from '#/db'
 import * as schema from '#/db/schema'
 
-const configuredBaseUrl = process.env.BETTER_AUTH_URL?.trim()
+const configuredSecret = process.env.BETTER_AUTH_SECRET?.trim()
+if (!configuredSecret) {
+  throw new Error('BETTER_AUTH_SECRET is required')
+}
+
+const configuredBaseUrl =
+  process.env.BETTER_AUTH_BASE_URL?.trim() ?? process.env.BETTER_AUTH_URL?.trim()
 const configuredTrustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
@@ -13,6 +19,7 @@ const trustedOrigins = Array.from(
 )
 
 export const auth = betterAuth({
+  secret: configuredSecret,
   baseURL: configuredBaseUrl,
   trustedOrigins: trustedOrigins.length > 0 ? trustedOrigins : undefined,
   database: drizzleAdapter(db, {

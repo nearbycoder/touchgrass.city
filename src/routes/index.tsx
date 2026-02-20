@@ -1338,7 +1338,7 @@ function App() {
           </section>
         ) : null}
 
-        <section className="pointer-events-auto absolute bottom-4 left-4 sm:bottom-6 sm:left-6">
+        <section className="pointer-events-auto absolute bottom-4 right-4 sm:bottom-6 sm:right-6">
           <div
             className="relative h-28 w-28 rounded-full border border-emerald-300/40 bg-black/45 backdrop-blur-sm touch-none"
             onPointerDown={startTouchControl}
