@@ -1,3 +1,5 @@
+![TouchGrass.city](public/touchgrass-city.png)
+
 # TouchGrass.city
 
 Realtime multiplayer "touch grass" game built with TanStack Start, WebSockets, Better Auth, and Postgres.

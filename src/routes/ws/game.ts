@@ -15,6 +15,7 @@ import {
   type PlayerSnapshot,
   type PowerupSnapshot,
   type PowerupType,
+  type RectSnapshot,
   type ServerToClientMessage,
   type WorldState,
 } from '#/lib/game-protocol'
@@ -48,6 +49,10 @@ interface EnemySpot extends EnemySnapshot {
   homeY: number
   territoryRadius: number
 }
+interface CityLayout {
+  streets: RectSnapshot[]
+  buildings: RectSnapshot[]
+}
 
 const GRASS_COUNT = 220
 const GRASS_PLAYER_PADDING = 8
@@ -74,6 +79,10 @@ const DOUBLE_DURATION_MS = 10_000
 const OVERGROWTH_THRESHOLD = 4
 const OVERGROWTH_BONUS = 3
 const JOIN_DELAY_MS = 5_000
+const CITY_COLS = 8
+const CITY_ROWS = 8
+const STREET_WIDTH = 170
+const BUILDING_MARGIN = 46
 
 const players = new Map<string, ServerPlayer>()
 const userScores = new Map<string, number>()
@@ -81,6 +90,7 @@ const userColors = new Map<string, string>()
 const userScoreLoads = new Map<string, Promise<void>>()
 const userColorLoads = new Map<string, Promise<void>>()
 const pendingJoinTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const cityLayout = createCityLayout()
 let powerups: PowerupSpot[] = []
 let enemies: EnemySpot[] = []
 let grasses = initializeGrass()
@@ -97,6 +107,91 @@ function randomBetween(min: number, max: number) {
 
 function randomPowerupType(): PowerupType {
   return POWERUP_TYPES[randomBetween(0, POWERUP_TYPES.length - 1)]
+}
+
+function seededUnit(seed: number) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453123
+  return value - Math.floor(value)
+}
+
+function createCityLayout(): CityLayout {
+  const streets: RectSnapshot[] = []
+  const buildings: RectSnapshot[] = []
+  const blockWidth = (MAP_WIDTH - STREET_WIDTH * (CITY_COLS + 1)) / CITY_COLS
+  const blockHeight = (MAP_HEIGHT - STREET_WIDTH * (CITY_ROWS + 1)) / CITY_ROWS
+
+  for (let col = 0; col <= CITY_COLS; col++) {
+    const x = col * (blockWidth + STREET_WIDTH)
+    streets.push({
+      id: `street-v-${col}`,
+      x,
+      y: 0,
+      width: STREET_WIDTH,
+      height: MAP_HEIGHT,
+    })
+  }
+
+  for (let row = 0; row <= CITY_ROWS; row++) {
+    const y = row * (blockHeight + STREET_WIDTH)
+    streets.push({
+      id: `street-h-${row}`,
+      x: 0,
+      y,
+      width: MAP_WIDTH,
+      height: STREET_WIDTH,
+    })
+  }
+
+  for (let row = 0; row < CITY_ROWS; row++) {
+    for (let col = 0; col < CITY_COLS; col++) {
+      const blockX = STREET_WIDTH + col * (blockWidth + STREET_WIDTH)
+      const blockY = STREET_WIDTH + row * (blockHeight + STREET_WIDTH)
+      const usableWidth = Math.max(80, blockWidth - BUILDING_MARGIN * 2)
+      const usableHeight = Math.max(80, blockHeight - BUILDING_MARGIN * 2)
+      const seedBase = row * 101 + col * 37 + 1
+      const widthFactor = 0.52 + seededUnit(seedBase) * 0.3
+      const heightFactor = 0.5 + seededUnit(seedBase + 1) * 0.34
+      const mainWidth = usableWidth * widthFactor
+      const mainHeight = usableHeight * heightFactor
+      const offsetX = (usableWidth - mainWidth) * seededUnit(seedBase + 2)
+      const offsetY = (usableHeight - mainHeight) * seededUnit(seedBase + 3)
+
+      buildings.push({
+        id: `tower-main-${row}-${col}`,
+        x: blockX + BUILDING_MARGIN + offsetX,
+        y: blockY + BUILDING_MARGIN + offsetY,
+        width: mainWidth,
+        height: mainHeight,
+      })
+
+      if (seededUnit(seedBase + 4) > 0.35) {
+        const corner = Math.floor(seededUnit(seedBase + 5) * 4)
+        const annexWidth = Math.max(60, usableWidth * (0.2 + seededUnit(seedBase + 6) * 0.22))
+        const annexHeight = Math.max(60, usableHeight * (0.2 + seededUnit(seedBase + 7) * 0.22))
+        let annexX = blockX + BUILDING_MARGIN
+        let annexY = blockY + BUILDING_MARGIN
+
+        if (corner === 1) {
+          annexX += usableWidth - annexWidth
+        } else if (corner === 2) {
+          annexY += usableHeight - annexHeight
+        } else if (corner === 3) {
+          annexX += usableWidth - annexWidth
+          annexY += usableHeight - annexHeight
+        }
+
+        buildings.push({
+          id: `tower-annex-${row}-${col}`,
+          x: annexX,
+          y: annexY,
+          width: annexWidth,
+          height: annexHeight,
+        })
+      }
+    }
+  }
+
+  return { streets, buildings }
 }
 
 function sanitizeColor(value: unknown): string | null {
@@ -144,6 +239,62 @@ function sanitizeName(user: SessionUser) {
   return 'Player'
 }
 
+function circleIntersectsRect(
+  x: number,
+  y: number,
+  radius: number,
+  rect: Pick<RectSnapshot, 'x' | 'y' | 'width' | 'height'>,
+) {
+  const closestX = clamp(x, rect.x, rect.x + rect.width)
+  const closestY = clamp(y, rect.y, rect.y + rect.height)
+  const dx = x - closestX
+  const dy = y - closestY
+  return dx * dx + dy * dy <= radius * radius
+}
+
+function isCircleBlockedByBuildings(x: number, y: number, radius: number) {
+  return cityLayout.buildings.some((building) => circleIntersectsRect(x, y, radius, building))
+}
+
+function resolveBlockedMovement(
+  currentX: number,
+  currentY: number,
+  targetX: number,
+  targetY: number,
+  radius: number,
+) {
+  const boundedTargetX = clamp(targetX, radius, MAP_WIDTH - radius)
+  const boundedTargetY = clamp(targetY, radius, MAP_HEIGHT - radius)
+  const tryOrder = (order: 'xy' | 'yx') => {
+    let nextX = currentX
+    let nextY = currentY
+
+    if (order === 'xy') {
+      if (!isCircleBlockedByBuildings(boundedTargetX, currentY, radius)) {
+        nextX = boundedTargetX
+      }
+      if (!isCircleBlockedByBuildings(nextX, boundedTargetY, radius)) {
+        nextY = boundedTargetY
+      }
+    } else {
+      if (!isCircleBlockedByBuildings(currentX, boundedTargetY, radius)) {
+        nextY = boundedTargetY
+      }
+      if (!isCircleBlockedByBuildings(boundedTargetX, nextY, radius)) {
+        nextX = boundedTargetX
+      }
+    }
+
+    const movedX = nextX - currentX
+    const movedY = nextY - currentY
+    return { x: nextX, y: nextY, movedSquared: movedX * movedX + movedY * movedY }
+  }
+
+  const xy = tryOrder('xy')
+  const yx = tryOrder('yx')
+  return xy.movedSquared >= yx.movedSquared ? xy : yx
+}
+
 function spawnGrass(existing: GrassSpot[], skipIndex?: number): GrassSpot {
   const minX = GRASS_RADIUS
   const maxX = MAP_WIDTH - GRASS_RADIUS
@@ -187,16 +338,30 @@ function spawnGrass(existing: GrassSpot[], skipIndex?: number): GrassSpot {
       const minDistance = GRASS_RADIUS + ENEMY_RADIUS + GRASS_PLAYER_PADDING
       return dx * dx + dy * dy <= minDistance * minDistance
     })
+    const hasBuildingCollision = isCircleBlockedByBuildings(next.x, next.y, GRASS_RADIUS)
 
-    if (!hasPlayerCollision && !hasGrassCollision && !hasPowerupCollision && !hasEnemyCollision) {
+    if (
+      !hasPlayerCollision &&
+      !hasGrassCollision &&
+      !hasPowerupCollision &&
+      !hasEnemyCollision &&
+      !hasBuildingCollision
+    ) {
       return next
     }
   }
 
-  return {
-    x: randomBetween(minX, maxX),
-    y: randomBetween(minY, maxY),
+  for (let i = 0; i < 32; i++) {
+    const fallback = {
+      x: randomBetween(minX, maxX),
+      y: randomBetween(minY, maxY),
+    }
+    if (!isCircleBlockedByBuildings(fallback.x, fallback.y, GRASS_RADIUS)) {
+      return fallback
+    }
   }
+
+  return { x: minX, y: minY }
 }
 
 function initializeGrass(): GrassSpot[] {
@@ -250,8 +415,15 @@ function spawnPowerup(existing: PowerupSpot[], skipIndex?: number): PowerupSpot 
       const minDistance = POWERUP_RADIUS + ENEMY_RADIUS + POWERUP_PLAYER_PADDING
       return dx * dx + dy * dy <= minDistance * minDistance
     })
+    const hasBuildingCollision = isCircleBlockedByBuildings(next.x, next.y, POWERUP_RADIUS)
 
-    if (!hasPlayerCollision && !hasGrassCollision && !hasPowerupCollision && !hasEnemyCollision) {
+    if (
+      !hasPlayerCollision &&
+      !hasGrassCollision &&
+      !hasPowerupCollision &&
+      !hasEnemyCollision &&
+      !hasBuildingCollision
+    ) {
       return {
         id: crypto.randomUUID(),
         type: randomPowerupType(),
@@ -261,11 +433,26 @@ function spawnPowerup(existing: PowerupSpot[], skipIndex?: number): PowerupSpot 
     }
   }
 
+  for (let i = 0; i < 32; i++) {
+    const fallback = {
+      x: randomBetween(minX, maxX),
+      y: randomBetween(minY, maxY),
+    }
+    if (!isCircleBlockedByBuildings(fallback.x, fallback.y, POWERUP_RADIUS)) {
+      return {
+        id: crypto.randomUUID(),
+        type: randomPowerupType(),
+        x: fallback.x,
+        y: fallback.y,
+      }
+    }
+  }
+
   return {
     id: crypto.randomUUID(),
     type: randomPowerupType(),
-    x: randomBetween(minX, maxX),
-    y: randomBetween(minY, maxY),
+    x: minX,
+    y: minY,
   }
 }
 
@@ -300,7 +487,29 @@ function getEnemyHome(index: number) {
   )
   const territoryRadius = Math.max(900, Math.floor(Math.min(cellWidth, cellHeight) * 0.8))
 
-  return { homeX, homeY, territoryRadius }
+  const snapped = resolveBlockedMovement(homeX, homeY, homeX, homeY, ENEMY_RADIUS)
+  if (!isCircleBlockedByBuildings(snapped.x, snapped.y, ENEMY_RADIUS)) {
+    return { homeX: snapped.x, homeY: snapped.y, territoryRadius }
+  }
+
+  let closestStreetPoint = { x: homeX, y: homeY }
+  let closestDistanceSquared = Number.POSITIVE_INFINITY
+  for (const street of cityLayout.streets) {
+    const pointX = clamp(homeX, street.x + ENEMY_RADIUS, street.x + street.width - ENEMY_RADIUS)
+    const pointY = clamp(homeY, street.y + ENEMY_RADIUS, street.y + street.height - ENEMY_RADIUS)
+    if (pointX < ENEMY_RADIUS || pointY < ENEMY_RADIUS) {
+      continue
+    }
+    const dx = homeX - pointX
+    const dy = homeY - pointY
+    const distanceSquared = dx * dx + dy * dy
+    if (distanceSquared < closestDistanceSquared) {
+      closestDistanceSquared = distanceSquared
+      closestStreetPoint = { x: pointX, y: pointY }
+    }
+  }
+
+  return { homeX: closestStreetPoint.x, homeY: closestStreetPoint.y, territoryRadius }
 }
 
 function spawnEnemy(existing: EnemySpot[], enemyIndex: number): EnemySpot {
@@ -326,8 +535,38 @@ function spawnEnemy(existing: EnemySpot[], enemyIndex: number): EnemySpot {
       const minDistance = ENEMY_RADIUS * 2 + 28
       return dx * dx + dy * dy <= minDistance * minDistance
     })
+    const hasBuildingCollision = isCircleBlockedByBuildings(x, y, ENEMY_RADIUS)
 
-    if (!hasEnemyCollision) {
+    if (!hasEnemyCollision && !hasBuildingCollision) {
+      return {
+        id: crypto.randomUUID(),
+        x,
+        y,
+        homeX: home.homeX,
+        homeY: home.homeY,
+        territoryRadius: home.territoryRadius,
+      }
+    }
+  }
+
+  for (let i = 0; i < 32; i++) {
+    const randomStreet = cityLayout.streets[randomBetween(0, cityLayout.streets.length - 1)]
+    const x = randomBetween(
+      Math.ceil(randomStreet.x + ENEMY_RADIUS),
+      Math.floor(randomStreet.x + randomStreet.width - ENEMY_RADIUS),
+    )
+    const y = randomBetween(
+      Math.ceil(randomStreet.y + ENEMY_RADIUS),
+      Math.floor(randomStreet.y + randomStreet.height - ENEMY_RADIUS),
+    )
+    const hasEnemyCollision = existing.some((enemy) => {
+      const dx = enemy.x - x
+      const dy = enemy.y - y
+      const minDistance = ENEMY_RADIUS * 2 + 28
+      return dx * dx + dy * dy <= minDistance * minDistance
+    })
+
+    if (!hasEnemyCollision && !isCircleBlockedByBuildings(x, y, ENEMY_RADIUS)) {
       return {
         id: crypto.randomUUID(),
         x,
@@ -368,16 +607,30 @@ function spawnPlayerPosition() {
       const minDistance = PLAYER_RADIUS + ENEMY_RADIUS + 60
       return dx * dx + dy * dy <= minDistance * minDistance
     })
+    const hasBuildingCollision = isCircleBlockedByBuildings(x, y, PLAYER_RADIUS)
 
-    if (!hasEnemyCollision) {
+    if (!hasEnemyCollision && !hasBuildingCollision) {
       return { x, y }
     }
   }
 
-  return {
-    x: randomBetween(PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS),
-    y: randomBetween(PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS),
+  for (let i = 0; i < 64; i++) {
+    const street = cityLayout.streets[randomBetween(0, cityLayout.streets.length - 1)]
+    const minStreetX = Math.ceil(street.x + PLAYER_RADIUS)
+    const maxStreetX = Math.floor(street.x + street.width - PLAYER_RADIUS)
+    const minStreetY = Math.ceil(street.y + PLAYER_RADIUS)
+    const maxStreetY = Math.floor(street.y + street.height - PLAYER_RADIUS)
+    if (minStreetX > maxStreetX || minStreetY > maxStreetY) {
+      continue
+    }
+    const x = randomBetween(minStreetX, maxStreetX)
+    const y = randomBetween(minStreetY, maxStreetY)
+    if (!isCircleBlockedByBuildings(x, y, PLAYER_RADIUS)) {
+      return { x, y }
+    }
   }
+
+  return { x: PLAYER_RADIUS, y: PLAYER_RADIUS }
 }
 
 function extendPowerup(currentUntil: number, now: number, durationMs: number) {
@@ -434,6 +687,8 @@ function getWorldState(): WorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    streets: cityLayout.streets,
+    buildings: cityLayout.buildings,
     grasses,
     powerups,
     enemies: enemies.map((enemy) => ({
@@ -693,12 +948,14 @@ function movePointToward(
 
   const distance = Math.sqrt(distanceSquared)
   const step = Math.min(maxStep, distance)
-  return {
-    x: clamp(currentX + (dx / distance) * step, ENEMY_RADIUS, MAP_WIDTH - ENEMY_RADIUS),
-    y: clamp(currentY + (dy / distance) * step, ENEMY_RADIUS, MAP_HEIGHT - ENEMY_RADIUS),
-    moved: step > 0,
-    distanceSquared,
-  }
+  const next = resolveBlockedMovement(
+    currentX,
+    currentY,
+    currentX + (dx / distance) * step,
+    currentY + (dy / distance) * step,
+    ENEMY_RADIUS,
+  )
+  return { x: next.x, y: next.y, moved: next.movedSquared > 0.0001, distanceSquared }
 }
 
 function updateEnemies() {
@@ -904,16 +1161,15 @@ const hooks: Partial<Hooks> = {
 
     const diagonalScale = dx !== 0 && dy !== 0 ? Math.SQRT1_2 : 1
     const moveSpeed = getPlayerMoveSpeed(player, now)
-    player.x = clamp(
+    const movedPlayer = resolveBlockedMovement(
+      player.x,
+      player.y,
       player.x + dx * moveSpeed * diagonalScale,
-      PLAYER_RADIUS,
-      MAP_WIDTH - PLAYER_RADIUS,
-    )
-    player.y = clamp(
       player.y + dy * moveSpeed * diagonalScale,
       PLAYER_RADIUS,
-      MAP_HEIGHT - PLAYER_RADIUS,
     )
+    player.x = movedPlayer.x
+    player.y = movedPlayer.y
 
     const powerupTouchDistanceSquared = (PLAYER_RADIUS + POWERUP_RADIUS) ** 2
     for (let i = 0; i < powerups.length; i++) {
@@ -946,16 +1202,20 @@ const hooks: Partial<Hooks> = {
         if (distance > 0.001) {
           const pullAmount = Math.min(MAGNET_PULL_PER_TICK, Math.max(0, distance - touchingDistance))
           if (pullAmount > 0) {
-            grasses[i].x = clamp(
+            const pulledX = clamp(
               grasses[i].x + (distanceX / distance) * pullAmount,
               GRASS_RADIUS,
               MAP_WIDTH - GRASS_RADIUS,
             )
-            grasses[i].y = clamp(
+            const pulledY = clamp(
               grasses[i].y + (distanceY / distance) * pullAmount,
               GRASS_RADIUS,
               MAP_HEIGHT - GRASS_RADIUS,
             )
+            if (!isCircleBlockedByBuildings(pulledX, pulledY, GRASS_RADIUS)) {
+              grasses[i].x = pulledX
+              grasses[i].y = pulledY
+            }
 
             distanceX = player.x - grasses[i].x
             distanceY = player.y - grasses[i].y

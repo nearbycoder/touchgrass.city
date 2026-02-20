@@ -31,11 +31,21 @@ export interface EnemySnapshot {
   y: number
 }
 
+export interface RectSnapshot {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface WorldState {
   map: {
     width: number
     height: number
   }
+  streets: RectSnapshot[]
+  buildings: RectSnapshot[]
   grasses: Array<{
     x: number
     y: number

@@ -12,6 +12,7 @@ import { authClient } from '#/lib/auth-client'
 import {
   type ClientToServerMessage,
   type PowerupType,
+  type RectSnapshot,
   type ServerToClientMessage,
   type WorldState,
 } from '#/lib/game-protocol'
@@ -43,7 +44,6 @@ const TILE_STYLE: CSSProperties = {
   backgroundSize: '180px 180px, 180px 180px, 360px 360px',
 }
 
-const TILE_SIZE = 180
 const CAMERA_LERP = 0.18
 const PLAYER_LERP = 0.32
 const ENEMY_SMOOTHING_RATE = 14
@@ -520,6 +520,65 @@ function App() {
       ctx.restore()
     }
 
+    const drawStreet = (street: RectSnapshot, worldOriginX: number, worldOriginY: number) => {
+      const screenX = street.x - worldOriginX
+      const screenY = street.y - worldOriginY
+      const endX = screenX + street.width
+      const endY = screenY + street.height
+
+      if (endX < 0 || screenX > viewportRef.current.width || endY < 0 || screenY > viewportRef.current.height) {
+        return
+      }
+
+      ctx.fillStyle = '#24343d'
+      ctx.fillRect(screenX, screenY, street.width, street.height)
+
+      ctx.strokeStyle = 'rgba(218,229,239,0.34)'
+      ctx.lineWidth = 2
+      ctx.setLineDash([14, 12])
+      if (street.width > street.height) {
+        const centerY = screenY + street.height * 0.5
+        ctx.beginPath()
+        ctx.moveTo(screenX, centerY)
+        ctx.lineTo(screenX + street.width, centerY)
+        ctx.stroke()
+      } else {
+        const centerX = screenX + street.width * 0.5
+        ctx.beginPath()
+        ctx.moveTo(centerX, screenY)
+        ctx.lineTo(centerX, screenY + street.height)
+        ctx.stroke()
+      }
+      ctx.setLineDash([])
+    }
+
+    const drawBuilding = (building: RectSnapshot, worldOriginX: number, worldOriginY: number) => {
+      const screenX = building.x - worldOriginX
+      const screenY = building.y - worldOriginY
+      const endX = screenX + building.width
+      const endY = screenY + building.height
+
+      if (endX < 0 || screenX > viewportRef.current.width || endY < 0 || screenY > viewportRef.current.height) {
+        return
+      }
+
+      const roofInset = Math.min(20, building.width * 0.2, building.height * 0.2)
+      ctx.fillStyle = '#3f5164'
+      ctx.fillRect(screenX, screenY, building.width, building.height)
+
+      ctx.fillStyle = '#54697f'
+      ctx.fillRect(
+        screenX + roofInset,
+        screenY + roofInset,
+        Math.max(10, building.width - roofInset * 2),
+        Math.max(10, building.height - roofInset * 2),
+      )
+
+      ctx.strokeStyle = '#1b2732'
+      ctx.lineWidth = 2
+      ctx.strokeRect(screenX, screenY, building.width, building.height)
+    }
+
     const frame = (now: number) => {
       const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000))
       lastFrameTime = now
@@ -597,24 +656,12 @@ function App() {
         const worldOriginX = camera.x - halfW
         const worldOriginY = camera.y - halfH
 
-        ctx.strokeStyle = 'rgba(76,145,95,0.32)'
-        ctx.lineWidth = 1
-
-        const startX = -((worldOriginX % TILE_SIZE) + TILE_SIZE) % TILE_SIZE
-        const startY = -((worldOriginY % TILE_SIZE) + TILE_SIZE) % TILE_SIZE
-
-        for (let x = startX; x <= width; x += TILE_SIZE) {
-          ctx.beginPath()
-          ctx.moveTo(Math.floor(x) + 0.5, 0)
-          ctx.lineTo(Math.floor(x) + 0.5, height)
-          ctx.stroke()
+        for (const street of worldState.streets) {
+          drawStreet(street, worldOriginX, worldOriginY)
         }
 
-        for (let y = startY; y <= height; y += TILE_SIZE) {
-          ctx.beginPath()
-          ctx.moveTo(0, Math.floor(y) + 0.5)
-          ctx.lineTo(width, Math.floor(y) + 0.5)
-          ctx.stroke()
+        for (const building of worldState.buildings) {
+          drawBuilding(building, worldOriginX, worldOriginY)
         }
 
         const grassCull = GRASS_SIZE
@@ -1165,6 +1212,7 @@ function App() {
         <section className="pointer-events-auto absolute left-4 top-4 rounded-xl border border-emerald-400/40 bg-black/60 px-3 py-2 text-xs backdrop-blur-sm">
           <p>Status: {socketStatus}</p>
           <p>Players: {world?.players.length ?? 0}</p>
+          <p>Towers: {world?.buildings.length ?? 0}</p>
           <p>Powerups: {world?.powerups.length ?? 0}</p>
           <p>Computers: {world?.enemies.length ?? 0}</p>
           <p className={fps >= 60 ? 'text-emerald-200' : 'text-amber-300'}>
@@ -1179,12 +1227,13 @@ function App() {
           {socketError ? <p className="text-amber-300">{socketError}</p> : null}
         </section>
 
-        <section className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-black/60 px-4 py-2 text-sm backdrop-blur-sm">
-          WASD / Arrow keys / Touch joystick | 20 territorial computers guard zones and reset your score on touch
+        <section className="absolute bottom-3 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-[10px] leading-tight backdrop-blur-sm md:bottom-4 md:w-auto md:max-w-[780px] md:rounded-xl md:px-4 md:py-2 md:text-sm">
+          Controls: WASD / Arrows / Touch joystick. Stay on streets and avoid towers.
+          20 territorial computers reset your score on touch.
         </section>
 
-        <section className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-black/60 px-3 py-2 text-xs backdrop-blur-sm">
-          Speed: faster move | Magnet: pulls nearby grass toward you | 2x Points: doubles grass score
+        <section className="absolute bottom-14 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1 text-[10px] leading-tight backdrop-blur-sm md:bottom-16 md:w-auto md:max-w-[780px] md:rounded-xl md:px-3 md:py-2 md:text-xs">
+          Powerups: Speed = faster movement | Magnet = pulls nearby grass | 2x Points = double score
         </section>
 
         <section className="pointer-events-auto absolute right-4 top-4 flex gap-2">
