@@ -107,6 +107,11 @@ bun --bun run db:migrate
 - Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` explicitly in production.
 - If requests pass through a reverse proxy/CDN, ensure `x-forwarded-host` and `x-forwarded-proto` are preserved, or set `BETTER_AUTH_TRUSTED_ORIGINS`.
 - Ensure your production Postgres is reachable from the app runtime.
+- Railway envs to configure:
+  - `DATABASE_URL` (from Railway Postgres service)
+  - `BETTER_AUTH_SECRET` (long random secret)
+  - `BETTER_AUTH_URL` (your Railway public domain, e.g. `https://touchgrass-city.up.railway.app`)
+  - `BETTER_AUTH_TRUSTED_ORIGINS` (same as URL, plus custom domain if you use one)
 - Build with:
 
 ```bash
