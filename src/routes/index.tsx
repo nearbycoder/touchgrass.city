@@ -934,6 +934,12 @@ function App() {
     setTouchStick({ active: true, x, y })
   }
 
+  const resetTouchControl = () => {
+    touchPointerIdRef.current = null
+    touchVectorRef.current = { dx: 0, dy: 0 }
+    setTouchStick({ active: false, x: 0, y: 0 })
+  }
+
   const startTouchControl = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (touchPointerIdRef.current !== null) {
       return
@@ -961,14 +967,40 @@ function App() {
       return
     }
 
-    touchPointerIdRef.current = null
-    touchVectorRef.current = { dx: 0, dy: 0 }
-    setTouchStick({ active: false, x: 0, y: 0 })
+    resetTouchControl()
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     event.preventDefault()
   }
+
+  const handleTouchControlLostCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (touchPointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    resetTouchControl()
+  }
+
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      resetTouchControl()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        resetTouchControl()
+      }
+    }
+
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
 
   const sendColorUpdate = (color: string) => {
     const socket = socketRef.current
@@ -1191,11 +1223,11 @@ function App() {
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/70" />
 
-        <section className="pointer-events-auto absolute left-1/2 top-4 -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-black/60 px-4 py-3 backdrop-blur-sm">
-          <h2 className="text-center text-sm font-bold uppercase tracking-wide text-emerald-200">
+        <section className="pointer-events-auto absolute left-1/2 top-4 z-10 w-[min(90vw,440px)] -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-black/60 px-3 py-2 backdrop-blur-sm md:w-auto md:px-4 md:py-3">
+          <h2 className="text-center text-xs font-bold uppercase tracking-wide text-emerald-200 md:text-sm">
             Leaderboard
           </h2>
-          <ol className="mt-2 min-w-[280px] space-y-1 text-sm">
+          <ol className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs md:min-w-[280px] md:max-h-none md:text-sm">
             {leaderboard.slice(0, 8).map((player, index) => (
               <li
                 key={player.connectionId}
@@ -1210,7 +1242,7 @@ function App() {
           </ol>
         </section>
 
-        <section className="pointer-events-auto absolute left-4 top-4 rounded-xl border border-emerald-400/40 bg-black/60 px-3 py-2 text-xs backdrop-blur-sm">
+        <section className="pointer-events-auto absolute left-4 top-4 hidden rounded-xl border border-emerald-400/40 bg-black/60 px-3 py-2 text-xs backdrop-blur-sm md:block">
           <p>Status: {socketStatus}</p>
           <p>Players: {world?.players.length ?? 0}</p>
           <p>Towers: {world?.buildings.length ?? 0}</p>
@@ -1228,20 +1260,24 @@ function App() {
           {socketError ? <p className="text-amber-300">{socketError}</p> : null}
         </section>
 
-        <section className="absolute bottom-3 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-[10px] leading-tight backdrop-blur-sm md:bottom-4 md:w-auto md:max-w-[780px] md:rounded-xl md:px-4 md:py-2 md:text-sm">
+        <section className="absolute bottom-24 left-1/2 w-[min(90vw,420px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-[10px] leading-tight backdrop-blur-sm md:hidden">
+          Controls: Joystick to move. Avoid towers/computers and stay on streets.
+        </section>
+
+        <section className="absolute bottom-3 left-1/2 hidden w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-[10px] leading-tight backdrop-blur-sm md:block md:bottom-4 md:w-auto md:max-w-[780px] md:rounded-xl md:px-4 md:py-2 md:text-sm">
           Controls: WASD / Arrows / Touch joystick. Stay on streets and avoid towers.
           20 territorial computers reset your score on touch.
         </section>
 
-        <section className="absolute bottom-14 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1 text-[10px] leading-tight backdrop-blur-sm md:bottom-16 md:w-auto md:max-w-[780px] md:rounded-xl md:px-3 md:py-2 md:text-xs">
+        <section className="absolute bottom-14 left-1/2 hidden w-[min(92vw,460px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1 text-[10px] leading-tight backdrop-blur-sm md:block md:bottom-16 md:w-auto md:max-w-[780px] md:rounded-xl md:px-3 md:py-2 md:text-xs">
           Powerups: Speed = faster movement | Magnet = pulls nearby grass | 2x Points = double score
         </section>
 
-        <section className="pointer-events-auto absolute right-4 top-4 flex gap-2">
+        <section className="pointer-events-auto absolute bottom-40 right-3 z-20 flex gap-2 md:bottom-auto md:right-4 md:top-4">
           <button
             type="button"
             onClick={openSettings}
-            className="rounded-md border border-emerald-300/50 bg-black/60 px-3 py-2 text-xs font-semibold backdrop-blur-sm hover:bg-black/70"
+            className="rounded-md border border-emerald-300/50 bg-black/60 px-2.5 py-1.5 text-[11px] font-semibold backdrop-blur-sm hover:bg-black/70 md:px-3 md:py-2 md:text-xs"
           >
             Settings
           </button>
@@ -1250,7 +1286,7 @@ function App() {
             onClick={() => {
               void authClient.signOut()
             }}
-            className="rounded-md border border-emerald-300/50 bg-black/60 px-3 py-2 text-xs font-semibold backdrop-blur-sm hover:bg-black/70"
+            className="rounded-md border border-emerald-300/50 bg-black/60 px-2.5 py-1.5 text-[11px] font-semibold backdrop-blur-sm hover:bg-black/70 md:px-3 md:py-2 md:text-xs"
           >
             Sign out
           </button>
@@ -1345,6 +1381,7 @@ function App() {
             onPointerMove={moveTouchControl}
             onPointerUp={endTouchControl}
             onPointerCancel={endTouchControl}
+            onLostPointerCapture={handleTouchControlLostCapture}
             style={{ touchAction: 'none' }}
           >
             <div className="absolute inset-4 rounded-full border border-emerald-300/20" />
