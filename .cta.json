@@ -1,0 +1,27 @@
+{
+  "projectName": "touchgrass.city",
+  "mode": "file-router",
+  "typescript": true,
+  "packageManager": "bun",
+  "includeExamples": false,
+  "tailwind": true,
+  "addOnOptions": {
+    "drizzle": {
+      "database": "postgresql"
+    }
+  },
+  "envVarValues": {},
+  "git": true,
+  "routerOnly": false,
+  "version": 1,
+  "framework": "react-cra",
+  "chosenAddOns": [
+    "biome",
+    "railway",
+    "better-auth",
+    "tRPC",
+    "drizzle",
+    "tanstack-query",
+    "shadcn"
+  ]
+}
