@@ -35,9 +35,11 @@ Players sign up, pick a color, move around a large scrolling map, collect grass 
 bun install
 ```
 
-2. Create `.env.local` in the project root:
+2. Create `.env.local` in the project root (or copy from `.env.example`):
 
 ```bash
+cp .env.example .env.local
+
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/touchgrass
 BETTER_AUTH_SECRET=replace-with-a-long-random-secret
 BETTER_AUTH_URL=http://localhost:3000
