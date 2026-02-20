@@ -66,7 +66,8 @@ bun --bun run dev
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Yes | `postgres://postgres:postgres@localhost:5432/touchgrass` | Postgres connection string used by Drizzle and score/profile persistence. |
 | `BETTER_AUTH_SECRET` | Yes (prod), recommended (dev) | `super-long-random-string` | Secret used by Better Auth for signing/encrypting auth data. |
-| `BETTER_AUTH_URL` | Recommended | `http://localhost:3000` | Base URL for Better Auth endpoints/cookies in local/prod deployments. |
+| `BETTER_AUTH_URL` | Recommended (required in many proxy deployments) | `http://localhost:3000` | Public app origin used by Better Auth for origin validation and callback/cookie behavior. |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Optional | `https://touchgrass.city,https://www.touchgrass.city` | Comma-separated extra origins allowed for Better Auth origin checks. |
 | `PORT` | Optional | `3000` | Server port (defaults to `3000`). |
 
 Note on `DATABASE_URL`: make sure it contains real Postgres credentials. Placeholder usernames like `username` can cause errors such as `role "username" does not exist`.
@@ -104,6 +105,7 @@ bun --bun run db:migrate
 ## Production Notes
 
 - Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` explicitly in production.
+- If requests pass through a reverse proxy/CDN, ensure `x-forwarded-host` and `x-forwarded-proto` are preserved, or set `BETTER_AUTH_TRUSTED_ORIGINS`.
 - Ensure your production Postgres is reachable from the app runtime.
 - Build with:
 
