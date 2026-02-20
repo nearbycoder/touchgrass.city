@@ -927,11 +927,11 @@ function App() {
 
     if (magnitude < JOYSTICK_DEADZONE) {
       touchVectorRef.current = { dx: 0, dy: 0 }
+      setTouchStick({ active: true, x: 0, y: 0 })
     } else {
       touchVectorRef.current = { dx: normalizedX, dy: normalizedY }
+      setTouchStick({ active: true, x, y })
     }
-
-    setTouchStick({ active: true, x, y })
   }
 
   const resetTouchControl = () => {
@@ -1260,7 +1260,7 @@ function App() {
           {socketError ? <p className="text-amber-300">{socketError}</p> : null}
         </section>
 
-        <section className="absolute bottom-24 left-1/2 w-[min(90vw,420px)] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-[10px] leading-tight backdrop-blur-sm md:hidden">
+        <section className="absolute bottom-24 left-3 right-36 rounded-lg border border-emerald-400/40 bg-black/60 px-3 py-1.5 text-left text-[10px] leading-tight backdrop-blur-sm md:hidden">
           Controls: Joystick to move. Avoid towers/computers and stay on streets.
         </section>
 
@@ -1390,7 +1390,9 @@ function App() {
                 touchStick.active ? 'opacity-100' : 'opacity-85'
               }`}
               style={{
-                transform: `translate(calc(-50% + ${touchStick.x}px), calc(-50% + ${touchStick.y}px))`,
+                transform: touchStick.active
+                  ? `translate(calc(-50% + ${touchStick.x}px), calc(-50% + ${touchStick.y}px))`
+                  : 'translate(-50%, -50%)',
               }}
             />
           </div>
