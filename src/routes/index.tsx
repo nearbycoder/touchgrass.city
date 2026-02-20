@@ -46,7 +46,7 @@ const TILE_STYLE: CSSProperties = {
 const TILE_SIZE = 180
 const CAMERA_LERP = 0.18
 const PLAYER_LERP = 0.32
-const ENEMY_LERP = 0.22
+const ENEMY_SMOOTHING_RATE = 14
 const PLAYER_RADIUS = 18
 const GRASS_SIZE = 36
 const POWERUP_SIZE = 28
@@ -404,6 +404,7 @@ function App() {
     let animationFrame = 0
     let frames = 0
     let fpsStart = performance.now()
+    let lastFrameTime = performance.now()
     let dpr = Math.min(2, window.devicePixelRatio || 1)
 
     const drawGrass = (screenX: number, screenY: number) => {
@@ -498,7 +499,7 @@ function App() {
     const drawEnemy = (screenX: number, screenY: number) => {
       const half = ENEMY_SIZE / 2
       ctx.save()
-      ctx.translate(screenX, screenY)
+      ctx.translate(Math.round(screenX), Math.round(screenY))
       ctx.shadowColor = 'rgba(239,68,68,0.7)'
       ctx.shadowBlur = 16
 
@@ -520,6 +521,10 @@ function App() {
     }
 
     const frame = (now: number) => {
+      const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000))
+      lastFrameTime = now
+      const enemyLerp = 1 - Math.exp(-ENEMY_SMOOTHING_RATE * deltaSeconds)
+
       const { width, height } = viewportRef.current
       if (width <= 0 || height <= 0) {
         animationFrame = requestAnimationFrame(frame)
@@ -656,8 +661,14 @@ function App() {
             continue
           }
 
-          current.x += (enemy.x - current.x) * ENEMY_LERP
-          current.y += (enemy.y - current.y) * ENEMY_LERP
+          current.x += (enemy.x - current.x) * enemyLerp
+          current.y += (enemy.y - current.y) * enemyLerp
+          if (Math.abs(enemy.x - current.x) < 0.02) {
+            current.x = enemy.x
+          }
+          if (Math.abs(enemy.y - current.y) < 0.02) {
+            current.y = enemy.y
+          }
         }
 
         for (const id of smoothedEnemies.keys()) {
@@ -995,7 +1006,7 @@ function App() {
             <h1 className="text-3xl font-black tracking-tight">TouchGrass.city</h1>
             <p className="mt-2 text-sm text-emerald-200">
               Large multiplayer field with gimmicks. Chase grass, grab powerups, and
-              chain huge combos.
+              stay ahead while computers chase you down.
             </p>
 
             {sessionPending ? (

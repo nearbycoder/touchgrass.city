@@ -36,11 +36,40 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       {
         title: 'TouchGrass.city',
       },
+      {
+        name: 'theme-color',
+        content: '#0f2c1b',
+      },
     ],
     links: [
       {
         rel: 'stylesheet',
         href: appCss,
+      },
+      {
+        rel: 'manifest',
+        href: '/site.webmanifest?v=touchgrass-1',
+      },
+      {
+        rel: 'icon',
+        type: 'image/png',
+        sizes: '32x32',
+        href: '/favicon-32x32.png?v=touchgrass-1',
+      },
+      {
+        rel: 'icon',
+        type: 'image/png',
+        sizes: '16x16',
+        href: '/favicon-16x16.png?v=touchgrass-1',
+      },
+      {
+        rel: 'shortcut icon',
+        href: '/favicon.ico?v=touchgrass-1',
+      },
+      {
+        rel: 'apple-touch-icon',
+        sizes: '180x180',
+        href: '/apple-touch-icon.png?v=touchgrass-1',
       },
     ],
   }),
@@ -52,6 +81,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          defer
+          data-domain="touchgrass.city"
+          src="https://tic.nrby.xyz/js/script.js"
+        />
       </head>
       <body>
         <TanStackQueryProvider>

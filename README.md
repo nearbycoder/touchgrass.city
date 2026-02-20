@@ -1,247 +1,114 @@
-Welcome to your new TanStack Start app! 
+# TouchGrass.city
 
-# Getting Started
+Realtime multiplayer "touch grass" game built with TanStack Start, WebSockets, Better Auth, and Postgres.
 
-To run this application:
+Players sign up, pick a color, move around a large scrolling map, collect grass for points, grab powerups, and avoid roaming computers that chase nearby players and reset score on contact.
+
+## Features
+
+- Realtime multiplayer game state over WebSockets (`/ws/game`)
+- Email/password auth with Better Auth
+- Persistent player scores and saved player color in Postgres
+- Large world with camera-centered movement
+- Powerups (speed, magnet, double points)
+- Enemy computers with territorial AI
+- Keyboard and touch joystick controls
+- In-game leaderboard and FPS counter
+
+## Tech Stack
+
+- TanStack Start + TanStack Router
+- React + TypeScript
+- CrossWS
+- Better Auth
+- Drizzle ORM + drizzle-kit
+- PostgreSQL
+- Tailwind CSS
+
+## Quick Start
+
+1. Install dependencies:
 
 ```bash
 bun install
+```
+
+2. Create `.env.local` in the project root:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/touchgrass
+BETTER_AUTH_SECRET=replace-with-a-long-random-secret
+BETTER_AUTH_URL=http://localhost:3000
+PORT=3000
+```
+
+3. Run database migrations:
+
+```bash
+bun --bun run db:migrate
+```
+
+4. Start development server:
+
+```bash
 bun --bun run dev
 ```
 
-# Building For Production
+5. Open `http://localhost:3000`.
 
-To build this application for production:
+## Environment Variables
+
+| Variable | Required | Example | Purpose |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Yes | `postgres://postgres:postgres@localhost:5432/touchgrass` | Postgres connection string used by Drizzle and score/profile persistence. |
+| `BETTER_AUTH_SECRET` | Yes (prod), recommended (dev) | `super-long-random-string` | Secret used by Better Auth for signing/encrypting auth data. |
+| `BETTER_AUTH_URL` | Recommended | `http://localhost:3000` | Base URL for Better Auth endpoints/cookies in local/prod deployments. |
+| `PORT` | Optional | `3000` | Server port (defaults to `3000`). |
+
+Note on `DATABASE_URL`: make sure it contains real Postgres credentials. Placeholder usernames like `username` can cause errors such as `role "username" does not exist`.
+
+## Database
+
+This project stores:
+
+- `player_scores` (persistent score by `user_id`)
+- `player_profiles` (persistent color by `user_id`)
+
+If you change schema, generate and run migrations:
+
+```bash
+bun --bun run db:generate
+bun --bun run db:migrate
+```
+
+## Scripts
+
+- `bun --bun run dev` - Start dev server on port 3000
+- `bun --bun run build` - Production build
+- `bun --bun run preview` - Preview production build
+- `bun --bun run start` - Run built server (`.output/server/index.mjs`)
+- `bun --bun run test` - Run tests
+- `bun --bun run lint` - Biome lint
+- `bun --bun run format` - Biome format
+- `bun --bun run check` - Biome check
+- `bun --bun run db:generate` - Generate Drizzle migration files
+- `bun --bun run db:migrate` - Apply migrations
+- `bun --bun run db:push` - Push schema directly to DB
+- `bun --bun run db:pull` - Pull schema from DB
+- `bun --bun run db:studio` - Open Drizzle Studio
+
+## Production Notes
+
+- Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` explicitly in production.
+- Ensure your production Postgres is reachable from the app runtime.
+- Build with:
 
 ```bash
 bun --bun run build
 ```
 
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+- Run with:
 
 ```bash
-bun --bun run test
+bun --bun run start
 ```
-
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `bun install @tailwindcss/vite tailwindcss -D`
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
-
-```bash
-bun --bun run lint
-bun --bun run format
-bun --bun run check
-```
-
-
-## Setting up Better Auth
-
-1. Generate and set the `BETTER_AUTH_SECRET` environment variable in your `.env.local`:
-
-   ```bash
-   bunx --bun @better-auth/cli secret
-   ```
-
-2. Visit the [Better Auth documentation](https://www.better-auth.com) to unlock the full potential of authentication in your app.
-
-### Adding a Database (Optional)
-
-Better Auth can work in stateless mode, but to persist user data, add a database:
-
-```typescript
-// src/lib/auth.ts
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-export const auth = betterAuth({
-  database: new Pool({
-    connectionString: process.env.DATABASE_URL,
-  }),
-  // ... rest of config
-});
-```
-
-Then run migrations:
-
-```bash
-bunx --bun @better-auth/cli migrate
-```
-
-
-## Shadcn
-
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
-
-```bash
-pnpm dlx shadcn@latest add button
-```
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
